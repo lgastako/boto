@@ -153,13 +153,14 @@ class MTurkConnection(AWSQueryConnection):
                    reward=None, duration=datetime.timedelta(days=7),
                    approval_delay=None, annotation=None,
                    questions=None, qualifications=None,
-                   response_groups=None):
+                   response_groups=None, hit_layout_id=None,
+                   hit_layout_parameters=None):
         """
         Creates a new HIT.
         Returns a ResultSet
         See: http://docs.amazonwebservices.com/AWSMechanicalTurkRequester/2006-10-31/ApiReference_CreateHITOperation.html
         """
-        
+
         # handle single or multiple questions
         neither = question is None and questions is None
         both = question is not None and questions is not None
@@ -173,7 +174,7 @@ class MTurkConnection(AWSQueryConnection):
             question_param = question
         elif isinstance(question, ExternalQuestion):
             question_param = question
-        
+
         # Handle basic required arguments and set up params dict
         params = {'Question': question_param.get_as_xml(),
                   'LifetimeInSeconds' :
@@ -188,10 +189,10 @@ class MTurkConnection(AWSQueryConnection):
         else:
             # Handle keywords
             final_keywords = MTurkConnection.get_keywords_as_string(keywords)
-            
+
             # Handle price argument
             final_price = MTurkConnection.get_price_as_price(reward)
-            
+
             final_duration = self.duration_as_seconds(duration)
 
             additional_params = dict(
@@ -212,15 +213,23 @@ class MTurkConnection(AWSQueryConnection):
         # add the annotation if specified
         if annotation is not None:
             params['RequesterAnnotation'] = annotation
-               
+
         # Add the Qualifications if specified
         if qualifications is not None:
             params.update(qualifications.get_as_params())
 
+        if hit_layout_id is not None:
+            params["HITLayoutId"] = hit_layout_id
+
+        if hit_layout_parameters is not None:
+            self.build_list_params(params,
+                                   hit_layout_parameters,
+                                   'HitLayoutParameter')
+
         # Handle optional response groups argument
         if response_groups:
             self.build_list_params(params, response_groups, 'ResponseGroup')
-                
+
         # Submit
         return self._process_request('CreateHIT', params, [('HIT', HIT),])
 
