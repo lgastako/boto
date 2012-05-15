@@ -34,8 +34,8 @@ import re
 
 class NotificationMessage:
 
-    NOTIFICATION_WSDL = "http://mechanicalturk.amazonaws.com/AWSMechanicalTurk/2006-05-05/AWSMechanicalTurkRequesterNotification.wsdl"
-    NOTIFICATION_VERSION = '2006-05-05'
+    NOTIFICATION_WSDL = "http://mechanicalturk.amazonaws.com/AWSMechanicalTurk/2012-03-25/AWSMechanicalTurkRequester.wsdl"
+    NOTIFICATION_VERSION = '2012-03-25'
 
     SERVICE_NAME = "AWSMechanicalTurkRequesterNotification"
     OPERATION_NAME = "Notify"

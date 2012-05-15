@@ -38,7 +38,7 @@ class MTurkRequestError(EC2ResponseError):
 
 class MTurkConnection(AWSQueryConnection):
     
-    APIVersion = '2008-08-02'
+    APIVersion = '2012-03-25'
     
     def __init__(self, aws_access_key_id=None, aws_secret_access_key=None,
                  is_secure=True, port=None, proxy=None, proxy_port=None,
@@ -161,54 +161,70 @@ class MTurkConnection(AWSQueryConnection):
         See: http://docs.amazonwebservices.com/AWSMechanicalTurkRequester/2006-10-31/ApiReference_CreateHITOperation.html
         """
 
-        # handle single or multiple questions
-        neither = question is None and questions is None
-        both = question is not None and questions is not None
-        if neither or both:
-            raise ValueError("Must specify either question (single Question instance) or questions (list or QuestionForm instance), but not both")
+        params = {}
 
-        if question:
-            questions = [question]
-        question_param = QuestionForm(questions)
-        if isinstance(question, QuestionForm):
-            question_param = question
-        elif isinstance(question, ExternalQuestion):
-            question_param = question
+        if hit_layout_id:
+            params["HITLayoutId"] = hit_layout_id
+            params["Title"] = "Should come from form"
+            params["Description"] = "Should come from form"
+            params["Reward.1.Amount"] = 0.2
+            params["Reward.1.CurrencyCode"] = "USD"
+            params["AssignmentDurationInSeconds"] = 60 * 60 * 3
+            params["LifetimeInSeconds"] = 604800
 
-        # Handle basic required arguments and set up params dict
-        params = {'Question': question_param.get_as_xml(),
-                  'LifetimeInSeconds' :
-                      self.duration_as_seconds(lifetime),
-                  'MaxAssignments' : max_assignments,
-                  }
-
-        # if hit type specified then add it
-        # else add the additional required parameters
-        if hit_type:
-            params['HITTypeId'] = hit_type
+            if hit_layout_parameters:
+                params.update(hit_layout_parameters.get_as_params())
         else:
-            # Handle keywords
-            final_keywords = MTurkConnection.get_keywords_as_string(keywords)
+            if hit_layout_parameters:
+                raise ValueError("Must specify hit_layout_id if specifying hit_layout_parameters")
+            # handle single or multiple questions
+            neither = question is None and questions is None
+            both = question is not None and questions is not None
+            if neither or both:
+                raise ValueError("Must specify either question (single Question instance) or questions (list or QuestionForm instance), but not both")
 
-            # Handle price argument
-            final_price = MTurkConnection.get_price_as_price(reward)
+            if question:
+                questions = [question]
+            question_param = QuestionForm(questions)
+            if isinstance(question, QuestionForm):
+                question_param = question
+            elif isinstance(question, ExternalQuestion):
+                question_param = question
 
-            final_duration = self.duration_as_seconds(duration)
+            # Handle basic required arguments and set up params dict
+            params.update({'Question': question_param.get_as_xml(),
+                           'LifetimeInSeconds':
+                                self.duration_as_seconds(lifetime),
+                           'MaxAssignments' : max_assignments,
+                           })
 
-            additional_params = dict(
-                Title=title,
-                Description=description,
-                Keywords=final_keywords,
-                AssignmentDurationInSeconds=final_duration,
-                )
-            additional_params.update(final_price.get_as_params('Reward'))
+            # if hit type specified then add it
+            # else add the additional required parameters
+            if hit_type:
+                params['HITTypeId'] = hit_type
+            else:
+                # Handle keywords
+                final_keywords = MTurkConnection.get_keywords_as_string(keywords)
 
-            if approval_delay is not None:
-                d = self.duration_as_seconds(approval_delay)
-                additional_params['AutoApprovalDelayInSeconds'] = d
+                # Handle price argument
+                final_price = MTurkConnection.get_price_as_price(reward)
 
-            # add these params to the others
-            params.update(additional_params)
+                final_duration = self.duration_as_seconds(duration)
+
+                additional_params = dict(
+                    Title=title,
+                    Description=description,
+                    Keywords=final_keywords,
+                    AssignmentDurationInSeconds=final_duration,
+                    )
+                additional_params.update(final_price.get_as_params('Reward'))
+
+                if approval_delay is not None:
+                    d = self.duration_as_seconds(approval_delay)
+                    additional_params['AutoApprovalDelayInSeconds'] = d
+
+                # add these params to the others
+                params.update(additional_params)
 
         # add the annotation if specified
         if annotation is not None:
@@ -217,14 +233,6 @@ class MTurkConnection(AWSQueryConnection):
         # Add the Qualifications if specified
         if qualifications is not None:
             params.update(qualifications.get_as_params())
-
-        if hit_layout_id is not None:
-            params["HITLayoutId"] = hit_layout_id
-
-        if hit_layout_parameters is not None:
-            self.build_list_params(params,
-                                   hit_layout_parameters,
-                                   'HitLayoutParameter')
 
         # Handle optional response groups argument
         if response_groups:
@@ -927,3 +935,20 @@ class QuestionFormAnswer(BaseAutoResultElement):
             self.qid = value
         elif name in ['FreeText', 'SelectionIdentifier', 'OtherSelectionText'] and self.qid:
             self.fields.append( value )
+
+
+class HitLayoutParameters:
+
+    def __init__(self, name_value_pairs):
+        self.name_value_pairs = name_value_pairs or []
+
+    def add(self, name, value):
+        self.name_value_pairs.append((name, value))
+
+    def get_as_params(self):
+        params = {}
+        for index, (name, value) in enumerate(self.name_value_pairs):
+            counter = index + 1
+            params['HITLayoutParameter.%d.Name' % counter] = name
+            params['HITLayoutParameter.%d.Value' % counter] = value
+        return params
