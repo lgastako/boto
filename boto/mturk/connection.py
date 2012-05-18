@@ -165,12 +165,8 @@ class MTurkConnection(AWSQueryConnection):
 
         if hit_layout_id:
             params["HITLayoutId"] = hit_layout_id
-            params["Title"] = "Should come from form"
-            params["Description"] = "Should come from form"
-            params["Reward.1.Amount"] = 0.2
-            params["Reward.1.CurrencyCode"] = "USD"
-            params["AssignmentDurationInSeconds"] = 60 * 60 * 3
-            params["LifetimeInSeconds"] = 604800
+            params["Title"] = title
+            params["Description"] = description
 
             if hit_layout_parameters:
                 params.update(hit_layout_parameters.get_as_params())
@@ -193,38 +189,38 @@ class MTurkConnection(AWSQueryConnection):
 
             # Handle basic required arguments and set up params dict
             params.update({'Question': question_param.get_as_xml(),
-                           'LifetimeInSeconds':
-                                self.duration_as_seconds(lifetime),
-                           'MaxAssignments' : max_assignments,
-                           })
+                           'MaxAssignments' : max_assignments})
 
-            # if hit type specified then add it
-            # else add the additional required parameters
-            if hit_type:
-                params['HITTypeId'] = hit_type
-            else:
-                # Handle keywords
-                final_keywords = MTurkConnection.get_keywords_as_string(keywords)
+        # if hit type specified then add it
+        # else add the additional required parameters
+        if hit_type:
+            params['HITTypeId'] = hit_type
+        else:
+            # Handle keywords
+            final_keywords = MTurkConnection.get_keywords_as_string(keywords)
 
-                # Handle price argument
-                final_price = MTurkConnection.get_price_as_price(reward)
+            # Handle price argument
+            final_price = MTurkConnection.get_price_as_price(reward)
 
-                final_duration = self.duration_as_seconds(duration)
+            final_duration = self.duration_as_seconds(duration)
 
-                additional_params = dict(
-                    Title=title,
-                    Description=description,
-                    Keywords=final_keywords,
-                    AssignmentDurationInSeconds=final_duration,
-                    )
-                additional_params.update(final_price.get_as_params('Reward'))
+            additional_params = dict(Title=title,
+                                     Description=description,
+                                     Keywords=final_keywords,
+                                     AssignmentDurationInSeconds=
+                                        final_duration)
+            additional_params.update(final_price.get_as_params('Reward'))
 
-                if approval_delay is not None:
-                    d = self.duration_as_seconds(approval_delay)
-                    additional_params['AutoApprovalDelayInSeconds'] = d
+            if approval_delay is not None:
+                d = self.duration_as_seconds(approval_delay)
+                additional_params['AutoApprovalDelayInSeconds'] = d
 
-                # add these params to the others
-                params.update(additional_params)
+            # add these params to the others
+            params.update(additional_params)
+
+        params.update({
+            'LifetimeInSeconds': self.duration_as_seconds(lifetime)   
+        })
 
         # add the annotation if specified
         if annotation is not None:
@@ -237,6 +233,16 @@ class MTurkConnection(AWSQueryConnection):
         # Handle optional response groups argument
         if response_groups:
             self.build_list_params(params, response_groups, 'ResponseGroup')
+
+        if "HITLayoutId" in params:
+            # Pre-flight checklist
+            _REQUIRED_PARAMS = ("Description", "Title", "Reward.1.Amount")
+            for param in _REQUIRED_PARAMS:
+                if params.get(param) is None:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.debug("params: %s", param)
+                    raise Exception("You must provide all of %s with HITLayoutId (for now) but at least %s was missing.." % (str(_REQUIRED_PARAMS), param))
 
         # Submit
         return self._process_request('CreateHIT', params, [('HIT', HIT),])
